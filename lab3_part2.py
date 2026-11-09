@@ -346,6 +346,7 @@ def causal_mask(n):
     Hint: np.triu(..., k=1)
     """
     # YOUR CODE HERE
+    return np.triu(np.ones((n, n), dtype=bool), k=1)
     raise NotImplementedError
 
 # ============================================================================
@@ -384,8 +385,13 @@ def attention(Q, K, V, mask=True):
         output    ->   [[1.000, 0.000],
                         [0.330, 0.670]]
     """
-    # YOUR CODE HERE
-    raise NotImplementedError
+    d_k = Q.shape[-1]
+    scores = (Q @ K.swapaxes(-1, -2)) / np.sqrt(d_k)
+    if mask:
+        scores = np.where(causal_mask(scores.shape[-1]), -np.inf, scores)
+    weights = softmax(scores)
+    output = weights @ V
+    return output, weights
 
 # ============================================================================
 # 3. Multiple heads  (GPT-2: 12 heads, each gets a 64-dim slice of Q, K, V)
@@ -411,8 +417,10 @@ def split_heads(x, n_heads):
 
     Hint: reshape to (n, n_heads, d_head), then transpose(1, 0, 2).
     """
-    # YOUR CODE HERE
-    raise NotImplementedError
+    n, d = x.shape
+    d_head = d // n_heads
+    x = x.reshape(n, n_heads, d_head)
+    return x.transpose(1, 0, 2)
 
 
 def merge_heads(x):
@@ -430,8 +438,8 @@ def merge_heads(x):
                                                           [4, 5, 6, 7]]
         merge_heads(split_heads(x, n_heads)) should give back x exactly.
     """
-    # YOUR CODE HERE
-    raise NotImplementedError
+    n_heads, n, d_head = x.shape
+    return x.transpose(1, 0, 2).reshape(n, n_heads * d_head)
 
 
 def multi_head_attention(x, block, n_heads=N_HEADS):
@@ -459,6 +467,14 @@ def multi_head_attention(x, block, n_heads=N_HEADS):
         x.shape = (6, 768)   ->   output.shape = (6, 768),   weights.shape = (12, 6, 6)
     """
     # YOUR CODE HERE
+    qkv = x @ block["W_qkv"] + block["b_qkv"]
+    Q, K, V = np.split(qkv, 3, axis=-1)
+    Q = split_heads(Q, n_heads)
+    K = split_heads(K, n_heads)
+    V = split_heads(V, n_heads)
+    out, weights = attention(Q, K, V, mask=True)
+    out = merge_heads(out) @ block["W_O"] + block["b_O"]
+    return out, weights
     raise NotImplementedError
 
 # ============================================================================
